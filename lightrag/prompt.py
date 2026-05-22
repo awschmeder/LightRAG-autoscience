@@ -21,16 +21,41 @@ Analyze the provided InputText to distill specific, domain-relevant entities and
 
 ## **1. Entity Extraction**
 
+### **HARD EXCLUSIONS -- Apply These First**
+
+Before extracting ANY entity, check it against these patterns. If it matches, **REJECT it immediately** -- do not include it in the output under any circumstances.
+
+* **Document Artifact Labels:** Any reference to a figure, table, section, appendix, equation, chapter, page, panel, box, scheme, chart, plate, or exhibit followed by a number or letter. This includes ALL of the following patterns and their variations:
+  * "Figure 1", "Figure 2a", "Fig. 3", "Fig 4B", "FIGURE 5"
+  * "Table 1", "Table 2", "TABLE 3", "Tbl. 1"
+  * "Section 1", "Section 2.1", "Sec. 3"
+  * "Appendix A", "Appendix B1"
+  * "Equation 1", "Eq. 2", "Eqn. 3"
+  * "Chapter 1", "Ch. 2"
+  * "Page 1", "p. 42", "pp. 10-15"
+  * "Panel A", "Panel B", "Scheme 1", "Chart 1", "Plate 1", "Box 1"
+  * Any similar pattern combining a document-structure word with a number or letter identifier
+* **Locally Scoped Identifiers:** Labels that only have meaning within the document's experimental design:
+  * "Experiment 1", "Sample A", "Condition 3", "Group 1", "The First Group"
+  * "Step 1", "Step 2", "Phase 1", "Stage 2", "Trial 1"
+  * "Run 1", "Batch 1", "Replicate 1", "Set A"
+* **Transient Steps:** Highly granular intermediate results (e.g., "The calculation", "The result", "The measurement")
+* **Meta-Entities & Self-References:** "The Study", "The Research", "This Article", "The Authors", "Proposed Model", "Current Work", "The Paper", "This Work", "Our Method", "The Present Study"
+* **Document Boilerplate:** Headers, footers, page numbers, copyright notices, running titles, journal names from headers, DOI strings, ISSN numbers
+* **Bibliographic Entities:** Author names, editor names, or journal names found in citations (e.g., "Smith", "Nature", "2019") unless they are the explicit **subject** of the text's analysis
+* **Numeric Values:** Raw data points, ranges, or standalone numbers (e.g., "43.4 degrees", "p < 0.05", "n = 100")
+* **Standalone Units:** Units of measurement in isolation (e.g., "mg/ml", "degrees", "seconds", "micromolar", "hours")
+
 ### **Criteria**
 
 Identify entities based strictly on their semantic importance and domain relevance, adapting the number of entities identified to the text's density.
 
-* **Adaptive Quantity:** Do not target a specific number of entities.  
-  * If the text is **dense** (e.g., an abstract listing many methods and materials), extract all significant entities.  
-  * If the text is **sparse** or irrelevant (e.g., a table of numbers or generic introductory text), extract **zero** entities.  
-  * *Prioritize quality and strict adherence to criteria over quantity.*  
-* **Domain Specificity (Crucial):** Extract only entities that exist in the specific domain's theoretical or real-world context.  
-  * *Valid Examples:* Specific research methods, named theories, mathematical theorems, algorithms, software libraries, chemical compounds, physical particles, economic models, market indices, regulatory acts, policy frameworks, management methodologies (e.g., Agile), funding sources, institutions, or specific researchers.  
+* **Adaptive Quantity:** Do not target a specific number of entities.
+  * If the text is **dense** (e.g., an abstract listing many methods and materials), extract all significant entities.
+  * If the text is **sparse** or irrelevant (e.g., a table of numbers or generic introductory text), extract **zero** entities.
+  * *Prioritize quality and strict adherence to criteria over quantity.*
+* **Domain Specificity (Crucial):** Extract only entities that exist in the specific domain's theoretical or real-world context.
+  * *Valid Examples:* Specific research methods, named theories, mathematical theorems, algorithms, software libraries, chemical compounds, physical particles, economic models, market indices, regulatory acts, policy frameworks, management methodologies (e.g., Agile), funding sources, institutions, or specific researchers.
 * **Explicit Mention Only (Anti-Hallucination):** Extract entities **only** if they are explicitly named or described in the text. Do not infer specific entity names from your general knowledge base if they are not present in the InputText (e.g., do not extract "SARS-CoV-2" if the text only says "the coronavirus"—extract "Coronavirus" instead).  
   * *Coreference Resolution:* While you must not infer entities from outside the text, you **SHOULD** resolve pronouns and coreferences (e.g., "it", "the method", "these authors") to their explicit antecedents if they appear clearly within the provided InputText.  
 * **Implicit Coordination:** If the text uses suspended hyphens or conjunctions to modify a shared noun (e.g., "T- and B-cells", "pre- and post-test", "high and low pressure"), you **MUST** expand and extract them as separate, full entities (e.g., extract "T-cells" and "B-cells"; "Pre-test" and "Post-test").  
@@ -44,8 +69,10 @@ Identify entities based strictly on their semantic importance and domain relevan
 * **Entity Types:** Determine high-level, clear entity types (e.g., measurement-method instead of method). Use kebab-case (lowercase with dashes) for the type slug.  
   * *Type Consistency:* Ensure that if an entity appears multiple times in your output, it is assigned the **exact same** entity_type_slug every time.  
   * *Blacklist:* Strictly avoid the following generic entity types: thing, object, concept, entity, item, unknown, term. Also exclude scientific generic terms: sample, data, result, outcome, conclusion, analysis, approach, technique (unless a specific technique is named). If an entity fits none of the specific categories, reconsider if it is worth extracting.  
-* **Naming Convention (Canonical Resolution):**  
-  * *Scientific Casing:* Preserve standard scientific casing for known terms. Do not apply Title Case to terms with standard lower-case prefixes or specific capitalization rules (e.g., keep mRNA, pH, dCas9, iPhone as is; do not force Mrna or Ph). Otherwise, use Title Case. **Hyphenated Title Case:** When applying Title Case to hyphenated compound terms, capitalize the first letter of **every** hyphen-separated segment (e.g., "Anti-Fructose Antibody", not "Anti-fructose Antibody"; "High-Performance Computing", not "High-performance Computing"; "Non-Newtonian Fluid", not "Non-newtonian Fluid"). This rule is subordinate to Scientific Casing preservation — if a segment has its own standard casing (e.g., "anti-dCas9"), preserve it.
+* **Naming Convention (Canonical Resolution):**
+  * *Title Case (Default):* Apply Title Case to entity names -- capitalize the first letter of each word. Even if the source text uses lowercase, convert to Title Case. Examples: "Radiology" not "radiology"; "Machine Learning" not "machine learning"; "Gradient Descent" not "gradient descent"; "Clinical Trial" not "clinical trial". The same entity must always appear with the same casing across all extractions.
+  * *Scientific Casing (Exception):* Preserve standard scientific casing for terms with established non-Title-Case conventions. Keep mRNA, pH, dCas9, iPhone, mPCR, tRNA as is -- do not force Mrna or Ph. This exception applies only to terms with well-known mixed-case or lowercase conventions in their field.
+  * *Hyphenated Title Case:* When applying Title Case to hyphenated compound terms, capitalize the first letter of **every** hyphen-separated segment (e.g., "Anti-Fructose Antibody", not "Anti-fructose Antibody"; "High-Performance Computing", not "High-performance Computing"; "Non-Newtonian Fluid", not "Non-newtonian Fluid"). This rule is subordinate to Scientific Casing preservation -- if a segment has its own standard casing (e.g., "anti-dCas9"), preserve it.
   * *Formula Protection:* Explicitly preserve the casing of chemical formulas and isotopic notations (e.g., keep CO2, CH4, H2O, C-14 exactly as written). Do not apply Title Case to them.  
   * *Eponym Protection:* While you must exclude specific citation markers (e.g., "Smith et al."), you **MUST** preserve eponymous terms where a person's name has become the standard scientific name for a concept (e.g., "Gaussian Distribution", "Alzheimer's Disease", "Gram Staining", "Heisenberg Uncertainty Principle").  
   * *State Preservation:* Always include adjectives that describe a biological, chemical, or physical state change or modification (e.g., extract "Phosphorylated ERK", not just "ERK"; "Activated Carbon", not just "Carbon"; "Mutant p53", not just "p53"). These are distinct entities from their base forms.
@@ -66,24 +93,15 @@ Identify entities based strictly on their semantic importance and domain relevan
 
 ### **Entity Exclusion Criteria (Do Not Extract)**
 
+*Note: Document artifacts, locally scoped identifiers, meta-entities, boilerplate, bibliographic entities, numeric values, standalone units, and transient steps are covered by the HARD EXCLUSIONS block above. The rules below cover additional semantic exclusions.*
+
 * **Negated Concepts:** Do not extract phrases indicating absence or negation (e.g., "No reaction", "Lack of evidence", "Absence of p53") as entities. Extract the core concept (e.g., "p53") and define the negative state via the relationship (e.g., not-detected) or description.
 * **Presence/Absence Modifiers:** Do not append experimental-context words like "Presence", "Absence", "Prescence", "Treatment", "Exposure", "Condition", or "Level" to entity names. These describe the experimental context, not the entity. Extract the base entity (e.g., "Sucrose") and express the presence/absence/condition through the relationship keyword or description (e.g., Sucrose -> detected-in -> Medium; or Sucrose -> absent-from -> Control Group).
-* **Action Noun Conversion:** Do not extract generic action nouns (e.g., "Measurement", "Activation", "Inhibition", "Usage") as entities. Instead, convert these nouns into the primary **predicate** (keyword) of the relationship connecting the agent and the object (e.g., use the keyword measures instead of extracting "Measurement").  
-* **Standalone Units:** Do not extract standalone units of measurement (e.g., "mg/ml", "degrees", "seconds", "micromolar", "hours") as entities. These values belong in relationship descriptions as parameters, not as graph nodes.  
-* **Meta-Entities & Self-References:** Generic terms referring to the paper itself, its creators, or its structure.  
-  * *Exclude:* "The Study," "The Research," "This Article," "The Authors," "Proposed Model" (unless specifically named), "Current Work."  
-* **Document Boilerplate:** Do not extract entities from headers, footers, page numbers, copyright notices, or running titles that are artifacts of the document layout and not part of the scientific content.  
-* **Bibliographic Entities:** Do not extract the names of authors, editors, or journals found in citations (e.g., 'Smith', 'Nature', '2019') unless they are the explicit **subject** of the text's analysis.  
-* **Locally Scoped Identifiers:** Identifiers that lack global meaning.  
-  * *Exclude:* "Experiment 1", "Sample A", "Condition 3", "The First Group" (unless accompanied by a specific description that makes them globally unique).  
-* **Generic System Components:** Do not extract generic component names (e.g., "Lens", "Pump", "Arm", "Valve") when they refer to parts of a standard system, unless they are modified by a specific technical descriptor (e.g., extract "Femtosecond Laser" or "Liquid Chromatography Pump", but not just "Pump" or "Laser").  
-* **Ambiguous Departments:** Do not extract generic department names (e.g., "Department of Chemistry", "The Lab", "Biology Dept") unless they are part of a fully unambiguous institution or government body (e.g., "US Department of Agriculture", "University of Oxford"). Grant numbers and specific funding codes **are** permitted.  
-* **Undefined Acronyms:** Do not extract acronyms (e.g., 'TPC', 'XYZ') if they are not defined within the InputText and are not universally known constants (like 'DNA' or 'NASA').  
-* **Standalone Adjectives:** Do not extract adjectives (e.g., 'Efficient', 'Thermal', 'Global') as entities unless they are part of a compound noun phrase (e.g., extract 'Thermal Stability', not 'Thermal').  
-* **Document Artifacts:** References to specific parts of the layout.  
-  * *Exclude:* "Figure 1," "Table 2," "Section 4," "Appendix A," "Equation 3."  
-* **Transient Steps:** Highly granular intermediate results or idiosyncratic steps (e.g., "Step 1," "The calculation").  
-* **Numeric Values:** Raw data points or ranges (e.g., "43.4 degrees").  
+* **Action Noun Conversion:** Do not extract generic action nouns (e.g., "Measurement", "Activation", "Inhibition", "Usage") as entities. Instead, convert these nouns into the primary **predicate** (keyword) of the relationship connecting the agent and the object (e.g., use the keyword measures instead of extracting "Measurement").
+* **Generic System Components:** Do not extract generic component names (e.g., "Lens", "Pump", "Arm", "Valve") when they refer to parts of a standard system, unless they are modified by a specific technical descriptor (e.g., extract "Femtosecond Laser" or "Liquid Chromatography Pump", but not just "Pump" or "Laser").
+* **Ambiguous Departments:** Do not extract generic department names (e.g., "Department of Chemistry", "The Lab", "Biology Dept") unless they are part of a fully unambiguous institution or government body (e.g., "US Department of Agriculture", "University of Oxford"). Grant numbers and specific funding codes **are** permitted.
+* **Undefined Acronyms:** Do not extract acronyms (e.g., 'TPC', 'XYZ') if they are not defined within the InputText and are not universally known constants (like 'DNA' or 'NASA').
+* **Standalone Adjectives:** Do not extract adjectives (e.g., 'Efficient', 'Thermal', 'Global') as entities unless they are part of a compound noun phrase (e.g., extract 'Thermal Stability', not 'Thermal').
 * **Incomplete Entities:** Entities that cannot be fully described by the text chunk (e.g., vague external references).
 
 ## **2. Relationship Extraction**
@@ -142,9 +160,11 @@ Identify direct, meaningful relationships between the extracted entities.
 
 Before generating the output, verify:
 
-1. Every extracted entity meets the **Entity Criteria** and violates none of the **Entity Exclusions**.  
-2. Every extracted relationship meets the **Relationship Criteria** and violates none of the **Relationship Exclusions**.  
-3. **Cross-Verification:** Ensure every extracted entity has at least one valid relationship to another extracted entity. Orphaned entities or entities connected only by excluded relationships must be removed.
+1. **Hard Exclusion Check:** Re-scan every extracted entity name against the **HARD EXCLUSIONS** list. Remove any entity matching a document artifact label (Figure/Table/Section/etc. + number/letter), locally scoped identifier, meta-entity, or other hard-excluded pattern.
+2. **Casing Check:** Verify every entity name uses Title Case (first letter of each word capitalized) unless a scientific casing exception applies. Fix any inconsistencies -- the same concept must never appear with different casing (e.g., do not output both "Radiology" and "radiology").
+3. Every extracted entity meets the **Entity Criteria** and violates none of the **Entity Exclusions**.
+4. Every extracted relationship meets the **Relationship Criteria** and violates none of the **Relationship Exclusions**.
+5. **Cross-Verification:** Ensure every extracted entity has at least one valid relationship to another extracted entity. Orphaned entities or entities connected only by excluded relationships must be removed.
 
 # **System Directives**
 

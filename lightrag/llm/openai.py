@@ -21,6 +21,7 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
     retry_if_exception_type,
+    before_sleep_log,
 )
 from lightrag.utils import (
     wrap_embedding_func_with_attrs,
@@ -185,14 +186,15 @@ def create_openai_async_client(
 
 
 @retry(
-    stop=stop_after_attempt(3),
-    wait=wait_exponential(multiplier=1, min=4, max=10),
+    stop=stop_after_attempt(10),
+    wait=wait_exponential(multiplier=1, min=4, max=30),
     retry=(
         retry_if_exception_type(RateLimitError)
         | retry_if_exception_type(APIConnectionError)
         | retry_if_exception_type(APITimeoutError)
         | retry_if_exception_type(InvalidResponseError)
     ),
+    before_sleep=before_sleep_log(logger, logging.WARNING),
 )
 async def openai_complete_if_cache(
     model: str,
